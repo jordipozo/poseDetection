@@ -1,0 +1,6 @@
+descargas/
+*.pptx
+*.mp4
+*.exe
+__pycache__/
+*.pyc

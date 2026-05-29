@@ -1,0 +1,12 @@
+{
+  "name": "Detección de Pose",
+  "short_name": "PoseDetect",
+  "description": "Captura y análisis de poses deportivas con MediaPipe",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "portrait-primary",
+  "background_color": "#0d0d0d",
+  "theme_color": "#0d0d0d",
+  "categories": ["sports", "health", "utilities"]
+}
