@@ -1,0 +1,29 @@
+{
+  "name": "posedetection",
+  "version": "1.0.0",
+  "description": "PWA para captura y análisis de poses deportivas con MediaPipe Pose. Funciona en el navegador (Chrome/Safari), sin instalación, con soporte offline.",
+  "main": "sw.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "lint": "eslint src/",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jordipozo/poseDetection.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jordipozo/poseDetection/issues"
+  },
+  "homepage": "https://github.com/jordipozo/poseDetection#readme",
+  "devDependencies": {
+    "eslint": "^8.57.1"
+  }
+}

@@ -15,6 +15,7 @@ const PRE_CACHE = [
   './src/data/landmarks.js',
   './src/data/postures.js',
   './src/shared/utils.js',
+  './src/shared/validateMeta.js',
   './src/features/camera/camera.js',
   './src/features/pose/pose.js',
   './src/features/recording/recorder.js',

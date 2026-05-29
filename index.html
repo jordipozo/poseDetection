@@ -745,6 +745,7 @@
 <script type="module">
 import { POSTURE_NAMES } from './src/data/postures.js';
 import { formatTime, generateFileName, isMobile } from './src/shared/utils.js';
+import { validateMeta } from './src/shared/validateMeta.js';
 import * as Camera   from './src/features/camera/camera.js';
 import * as Pose     from './src/features/pose/pose.js';
 import * as Recorder from './src/features/recording/recorder.js';
@@ -906,6 +907,11 @@ function stopRecording() {
 }
 
 async function handleRecordingStop(videoBlob, metaJson, { durationS, totalFrames, avgFps, ext }, dorsalValue, postureValue) {
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    const { valid, errors } = validateMeta(metaJson);
+    if (!valid) console.warn('[validateMeta] Metadatos inválidos:', errors);
+  }
+
   const baseName = generateFileName(dorsalValue, postureValue);
 
   if (state.autoSave && Storage.getDirHandle()) {

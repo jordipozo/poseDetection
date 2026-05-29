@@ -12,7 +12,7 @@ let _mimeType        = '';
 let _active          = false;
 let _onStop          = null;
 let _onTick          = null;
-let _maxDuration     = 30_000;
+let _maxDuration     = 30000;
 let _dorsalValue     = '';
 let _postureValue    = '';
 let _width           = 640;
@@ -30,7 +30,7 @@ export function startRecording(canvas, {
   postureValue = '',
   width        = 640,
   height       = 480,
-  maxDuration  = 30_000,
+  maxDuration  = 30000,
   fps          = 30,
   onStop,
   onTick,
