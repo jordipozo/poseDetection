@@ -4,7 +4,7 @@
  * Tras la primera carga con conexión, la app funciona offline.
  */
 
-const CACHE = 'pose-v2';
+const CACHE = 'pose-v3';
 
 // Assets estáticos que se pre-cachean en el install
 const PRE_CACHE = [

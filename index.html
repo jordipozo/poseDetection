@@ -356,6 +356,96 @@
       margin-top: -4px;
     }
 
+    .btn-csv {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    /* ── Review panel ── */
+    #reviewPanel {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      background: rgba(0,0,0,0.82);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    #reviewPanel.visible { display: flex; }
+
+    .review-card {
+      max-height: 80vh;
+      overflow-y: auto;
+      gap: 12px;
+    }
+
+    .rec-item {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .rec-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .rec-item-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .rec-item-meta {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    .btn-delete {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--accent);
+      font-size: 13px;
+      padding: 4px 10px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .btn-delete:active { opacity: 0.7; }
+
+    /* ── Duration select in settingsRow ── */
+    #durationSelect {
+      flex: 0 0 60px;
+      height: 36px;
+    }
+
+    #reviewBtn {
+      flex: 0 0 36px;
+      height: 36px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #reviewBtn:active { opacity: 0.75; }
+
     .btn-icon {
       font-size: 18px;
       line-height: 1;
@@ -655,13 +745,21 @@
         <span>📁</span>
         <span id="dirBtnLabel">Sin carpeta</span>
       </button>
+      <button id="reviewBtn" aria-label="Ver grabaciones" title="Ver grabaciones" style="display:none">📋</button>
+      <select id="durationSelect" class="sel-control" aria-label="Duración máxima">
+        <option value="15000">15 s</option>
+        <option value="30000" selected>30 s</option>
+        <option value="60000">60 s</option>
+        <option value="120000">2 min</option>
+        <option value="0">∞</option>
+      </select>
       <div id="autoSaveWrap">
         <label id="autoSaveLabel" for="autoSaveToggle">Auto</label>
         <input type="checkbox" id="autoSaveToggle" role="switch" aria-label="Guardado automático">
       </div>
     </div>
     <div id="controls">
-      <div id="timer">0:00 / 0:30</div>
+      <div id="timer">0:00 / 30 s</div>
       <button id="recordBtn" aria-label="Grabar">
         <div class="inner"></div>
       </button>
@@ -706,6 +804,10 @@
         <span class="btn-icon">📄</span>
         Descargar Metadatos
       </button>
+      <button class="btn-download btn-csv" id="btnDownloadCsv">
+        <span class="btn-icon">📊</span>
+        Descargar CSV
+      </button>
 
       <div class="ios-hint" id="iosHint">
         <span class="ios-hint-icon">ℹ️</span>
@@ -718,6 +820,15 @@
       <button class="btn-download btn-new" id="btnNewRecording">
         Nueva grabación
       </button>
+    </div>
+  </div>
+
+  <!-- Review panel (previous recordings) -->
+  <div id="reviewPanel">
+    <div class="panel-card review-card">
+      <div class="panel-title">Grabaciones guardadas</div>
+      <div id="reviewList"></div>
+      <button class="btn-download btn-new" id="btnCloseReview">Cerrar</button>
     </div>
   </div>
 
@@ -744,7 +855,7 @@
 
 <script type="module">
 import { POSTURE_NAMES } from './src/data/postures.js';
-import { formatTime, generateFileName, isMobile } from './src/shared/utils.js';
+import { formatTime, generateFileName, isMobile, buildCsv } from './src/shared/utils.js';
 import { validateMeta } from './src/shared/validateMeta.js';
 import * as Camera   from './src/features/camera/camera.js';
 import * as Pose     from './src/features/pose/pose.js';
@@ -754,10 +865,9 @@ import * as Storage  from './src/features/storage/storage.js';
 // ─────────────────────────────────────────────
 //  Constants
 // ─────────────────────────────────────────────
-const MAX_DURATION_MS = 30_000;
-const TARGET_FPS      = 30;
-const CANVAS_W        = 640;
-const CANVAS_H        = 480;
+const TARGET_FPS = 30;
+const CANVAS_W   = 640;
+const CANVAS_H   = 480;
 
 // ─────────────────────────────────────────────
 //  DOM refs
@@ -785,12 +895,18 @@ const postureSelect    = document.getElementById('postureSelect');
 const toastEl          = document.getElementById('toast');
 const btnDownloadVideo = document.getElementById('btnDownloadVideo');
 const btnDownloadJson  = document.getElementById('btnDownloadJson');
+const btnDownloadCsv   = document.getElementById('btnDownloadCsv');
 const btnNewRecording  = document.getElementById('btnNewRecording');
 const iosHint          = document.getElementById('iosHint');
 const panelSubtitle    = document.getElementById('panelSubtitle');
 const statDuration     = document.getElementById('statDuration');
 const statFrames       = document.getElementById('statFrames');
 const statFps          = document.getElementById('statFps');
+const durationSelect   = document.getElementById('durationSelect');
+const reviewBtn        = document.getElementById('reviewBtn');
+const reviewPanel      = document.getElementById('reviewPanel');
+const reviewList       = document.getElementById('reviewList');
+const btnCloseReview   = document.getElementById('btnCloseReview');
 
 // ─────────────────────────────────────────────
 //  UI state
@@ -816,9 +932,19 @@ function showToast(msg = '✓ Guardado') {
   state.toastTimer = setTimeout(() => toastEl.classList.remove('visible'), 1200);
 }
 
+function getMaxDuration() {
+  const val = parseInt(durationSelect.value);
+  return val === 0 ? Infinity : val;
+}
+
+function getDurationLabel() {
+  const val = parseInt(durationSelect.value);
+  return val === 0 ? '∞' : formatTime(val);
+}
+
 function resetForNextRecording() {
   setStatus('Listo · Toca el botón para grabar', 'ok');
-  timer.textContent       = '0:00 / 0:30';
+  timer.textContent       = `0:00 / ${getDurationLabel()}`;
   progressBar.style.width = '0%';
 }
 
@@ -866,6 +992,8 @@ function startRecording() {
   const recordingStart = performance.now();
   const dorsalValue    = dorsalSelect.value;
   const postureValue   = postureSelect.value;
+  const maxDuration    = getMaxDuration();
+  const durationLabel  = getDurationLabel();
 
   Pose.setRecordingState(true, recordingStart);
   Pose.setFrameCallback((frame) => Recorder.addFrame(frame));
@@ -875,10 +1003,10 @@ function startRecording() {
     postureValue,
     width       : CANVAS_W,
     height      : CANVAS_H,
-    maxDuration : MAX_DURATION_MS,
+    maxDuration,
     fps         : TARGET_FPS,
     onTick      : ({ elapsed, pct }) => {
-      timer.textContent       = `${formatTime(elapsed)} / 0:30`;
+      timer.textContent       = `${formatTime(elapsed)} / ${durationLabel}`;
       progressBar.style.width = `${pct}%`;
     },
     onStop: (videoBlob, metaJson, info) =>
@@ -902,7 +1030,7 @@ function stopRecording() {
   recDot.style.display    = 'none';
   flipBtn.disabled        = false;
   setStatus('Procesando grabación…', 'dim');
-  timer.textContent       = '0:00 / 0:30';
+  timer.textContent       = `0:00 / ${getDurationLabel()}`;
   progressBar.style.width = '0%';
 }
 
@@ -913,11 +1041,12 @@ async function handleRecordingStop(videoBlob, metaJson, { durationS, totalFrames
   }
 
   const baseName = generateFileName(dorsalValue, postureValue);
+  const csvBlob  = new Blob([buildCsv(metaJson)], { type: 'text/csv' });
 
   if (state.autoSave && Storage.getDirHandle()) {
     setStatus('Guardando…', 'dim');
     try {
-      const via = await Storage.save(videoBlob, metaJson, baseName, ext);
+      const via = await Storage.save(videoBlob, metaJson, baseName, ext, csvBlob);
       showToast(via !== 'none' ? '✓ Guardado' : '⚠ Guardado en descargas');
       resetForNextRecording();
       return;
@@ -928,7 +1057,7 @@ async function handleRecordingStop(videoBlob, metaJson, { durationS, totalFrames
   }
 
   if (state.autoSave && !Storage.getDirHandle() && !isMobile()) {
-    const via = await Storage.save(videoBlob, metaJson, baseName, ext);
+    const via = await Storage.save(videoBlob, metaJson, baseName, ext, csvBlob);
     showToast(via !== 'none' ? '✓ Descargado' : '⚠ Error al descargar');
     resetForNextRecording();
     return;
@@ -944,6 +1073,7 @@ async function handleRecordingStop(videoBlob, metaJson, { durationS, totalFrames
     const jsonBlob = new Blob([JSON.stringify(metaJson, null, 2)], { type: 'application/json' });
     Storage.downloadBlob(jsonBlob, `${baseName}_metadata.json`);
   };
+  btnDownloadCsv.onclick   = () => Storage.downloadBlob(csvBlob, `${baseName}_landmarks.csv`);
 
   showDownloadPanel();
 }
@@ -986,6 +1116,65 @@ async function switchCamera() {
 }
 
 // ─────────────────────────────────────────────
+//  Review panel (T7.2)
+// ─────────────────────────────────────────────
+async function openReviewPanel() {
+  reviewList.innerHTML = '<p style="color:var(--text-dim);font-size:13px;text-align:center">Cargando…</p>';
+  reviewPanel.classList.add('visible');
+
+  let recordings;
+  try {
+    recordings = await Storage.listRecordings();
+  } catch (err) {
+    reviewList.innerHTML = `<p style="color:var(--accent);font-size:13px;text-align:center">Error al leer la carpeta: ${err.message}</p>`;
+    return;
+  }
+
+  if (recordings.length === 0) {
+    reviewList.innerHTML = '<p style="color:var(--text-dim);font-size:13px;text-align:center">No hay grabaciones en esta carpeta.</p>';
+    return;
+  }
+
+  reviewList.innerHTML = '';
+  for (const { fileName, data } of recordings) {
+    const rec      = data.recording || {};
+    const baseName = fileName.replace('_metadata.json', '');
+    const ext      = rec.video_mime ? (rec.video_mime.startsWith('video/mp4') ? 'mp4' : 'webm') : 'mp4';
+    const date     = rec.date ? new Date(rec.date).toLocaleString() : '—';
+    const dorsal   = rec.dorsal   ?? '—';
+    const posture  = rec.posture_name ? rec.posture_name.replace('_', ' ') : '—';
+
+    const item = document.createElement('div');
+    item.className = 'rec-item';
+    item.innerHTML = `
+      <div class="rec-item-header">
+        <span class="rec-item-title">#${dorsal} · ${posture}</span>
+        <button class="btn-delete" data-base="${baseName}" data-ext="${ext}">Borrar</button>
+      </div>
+      <div class="rec-item-meta">
+        ${rec.duration_seconds ?? '—'} s · ${rec.fps ?? '—'} fps · ${date}
+      </div>`;
+    reviewList.appendChild(item);
+  }
+
+  reviewList.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.btn-delete');
+    if (!btn) return;
+    const { base, ext } = btn.dataset;
+    if (!confirm(`¿Eliminar la grabación "${base}"?`)) return;
+    try {
+      await Storage.deleteRecording(base, ext);
+      btn.closest('.rec-item').remove();
+      if (reviewList.children.length === 0) {
+        reviewList.innerHTML = '<p style="color:var(--text-dim);font-size:13px;text-align:center">No hay grabaciones en esta carpeta.</p>';
+      }
+    } catch (err) {
+      setStatus('Error al eliminar la grabación', 'err');
+    }
+  }, { once: true });
+}
+
+// ─────────────────────────────────────────────
 //  Event listeners
 // ─────────────────────────────────────────────
 recordBtn.addEventListener('click', () => {
@@ -1015,6 +1204,16 @@ document.addEventListener('visibilitychange', async () => {
   if (streamDead) await restartCameraIfNeeded();
 });
 
+durationSelect.addEventListener('change', () => {
+  localStorage.setItem('pose_max_duration', durationSelect.value);
+  resetForNextRecording();
+  const ms = parseInt(durationSelect.value);
+  if (ms > 60000) setStatus('⚠ Grabaciones largas generan archivos grandes', 'dim');
+});
+
+reviewBtn.addEventListener('click', openReviewPanel);
+btnCloseReview.addEventListener('click', () => reviewPanel.classList.remove('visible'));
+
 dorsalSelect.addEventListener('change', () => {
   dorsalSelect.classList.toggle('selected', dorsalSelect.value !== '');
 });
@@ -1029,7 +1228,8 @@ dirBtn.addEventListener('click', async () => {
     if (handle) {
       dirBtnLabel.textContent = handle.name;
       dirBtn.classList.add('selected');
-      dirBtn.title = handle.name;
+      dirBtn.title    = handle.name;
+      reviewBtn.style.display = '';
       if (state.autoSave) setStatus(`Auto-guardado en: ${handle.name}`, 'ok');
     }
   } catch (err) {
@@ -1099,6 +1299,14 @@ async function initApp() {
 // ─────────────────────────────────────────────
 //  Boot
 // ─────────────────────────────────────────────
+(function restoreDuration() {
+  const saved = localStorage.getItem('pose_max_duration');
+  if (saved && durationSelect.querySelector(`option[value="${saved}"]`)) {
+    durationSelect.value = saved;
+  }
+  timer.textContent = `0:00 / ${getDurationLabel()}`;
+})();
+
 (function initDirBtn() {
   if (!Storage.supportsDirectoryPicker()) {
     dirBtn.disabled             = true;

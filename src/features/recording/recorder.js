@@ -70,12 +70,15 @@ export function startRecording(canvas, {
 
   _timerInterval = setInterval(() => {
     const elapsed = performance.now() - _recordingStart;
-    if (_onTick) _onTick({ elapsed, pct: Math.min(elapsed / _maxDuration * 100, 100) });
+    const pct     = isFinite(_maxDuration) ? Math.min(elapsed / _maxDuration * 100, 100) : 0;
+    if (_onTick) _onTick({ elapsed, pct });
   }, 250);
 
-  _autoStopTimeout = setTimeout(() => {
-    if (_active) stopRecording();
-  }, maxDuration);
+  if (isFinite(maxDuration)) {
+    _autoStopTimeout = setTimeout(() => {
+      if (_active) stopRecording();
+    }, maxDuration);
+  }
 }
 
 export function stopRecording() {

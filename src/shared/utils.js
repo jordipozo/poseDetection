@@ -44,3 +44,13 @@ export function fileExtFromMime(mime) {
   if (mime.startsWith('video/webm')) return 'webm';
   return 'mp4';
 }
+
+export function buildCsv(metaJson) {
+  const lines = ['frame_index,timestamp_ms,landmark_index,name,x,y,z,visibility'];
+  for (const frame of metaJson.frames) {
+    for (const lm of frame.landmarks) {
+      lines.push(`${frame.frame_index},${frame.timestamp_ms},${lm.index},${lm.name},${lm.x},${lm.y},${lm.z},${lm.visibility}`);
+    }
+  }
+  return lines.join('\n');
+}
