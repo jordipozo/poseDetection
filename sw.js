@@ -4,14 +4,15 @@
  * Tras la primera carga con conexión, la app funciona offline.
  */
 
-const CACHE = 'pose-v1';
+const CACHE = 'pose-v2';
 
 // Assets estáticos que se pre-cachean en el install
 const PRE_CACHE = [
   './index.html',
-  'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js',
-  'https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js',
-  'https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js',
+  './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js',
 ];
 
 // ── Install: pre-cachear assets conocidos ──

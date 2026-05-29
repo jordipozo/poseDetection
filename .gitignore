@@ -1,6 +1,6 @@
 descargas/
-*.pptx
 *.mp4
-*.exe
-__pycache__/
+*.webm
+*.pptx
 *.pyc
+__pycache__/
