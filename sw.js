@@ -14,6 +14,11 @@ const PRE_CACHE = [
   './icons/icon-512.png',
   './src/data/landmarks.js',
   './src/data/postures.js',
+  './src/shared/utils.js',
+  './src/features/camera/camera.js',
+  './src/features/pose/pose.js',
+  './src/features/recording/recorder.js',
+  './src/features/storage/storage.js',
   'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js',
 ];
 

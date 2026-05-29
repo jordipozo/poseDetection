@@ -750,590 +750,65 @@
 </div>
 
 <script type="module">
-import { LANDMARK_NAMES, POSE_CONNECTIONS } from './src/data/landmarks.js';
-import { POSTURE_NAMES } from './src/data/postures.js';
+import { formatTime, generateFileName, isMobile } from './src/shared/utils.js';
+import * as Camera   from './src/features/camera/camera.js';
+import * as Pose     from './src/features/pose/pose.js';
+import * as Recorder from './src/features/recording/recorder.js';
+import * as Storage  from './src/features/storage/storage.js';
 
 // ─────────────────────────────────────────────
 //  Constants
 // ─────────────────────────────────────────────
-const MAX_DURATION_MS  = 30_000;
-const TARGET_FPS       = 30;
-const CANVAS_W         = 640;
-const CANVAS_H         = 480;
+const MAX_DURATION_MS = 30_000;
+const TARGET_FPS      = 30;
+const CANVAS_W        = 640;
+const CANVAS_H        = 480;
 
 // ─────────────────────────────────────────────
 //  DOM refs
 // ─────────────────────────────────────────────
-const videoEl         = document.getElementById('videoEl');
-const canvas          = document.getElementById('canvas');
-const ctx             = canvas.getContext('2d');
-const statusMsg       = document.getElementById('statusMsg');
-const recDot          = document.getElementById('recDot');
-const timer           = document.getElementById('timer');
-const progressBar     = document.getElementById('progressBar');
-const recordBtn       = document.getElementById('recordBtn');
-const downloadPanel   = document.getElementById('downloadPanel');
-const loadingOverlay  = document.getElementById('loadingOverlay');
-const loadingText     = document.getElementById('loadingText');
-const permError       = document.getElementById('permError');
-const permText        = document.getElementById('permText');
-const btnRetry        = document.getElementById('btnRetry');
-const flipBtn         = document.getElementById('flipBtn');
-const dirBtn          = document.getElementById('dirBtn');
-const dirBtnLabel     = document.getElementById('dirBtnLabel');
-const autoSaveToggle  = document.getElementById('autoSaveToggle');
-const dorsalSelect    = document.getElementById('dorsalSelect');
-const postureSelect   = document.getElementById('postureSelect');
-const toastEl         = document.getElementById('toast');
+const videoEl          = document.getElementById('videoEl');
+const canvas           = document.getElementById('canvas');
+const ctx              = canvas.getContext('2d');
+const statusMsg        = document.getElementById('statusMsg');
+const recDot           = document.getElementById('recDot');
+const timer            = document.getElementById('timer');
+const progressBar      = document.getElementById('progressBar');
+const recordBtn        = document.getElementById('recordBtn');
+const downloadPanel    = document.getElementById('downloadPanel');
+const loadingOverlay   = document.getElementById('loadingOverlay');
+const loadingText      = document.getElementById('loadingText');
+const permError        = document.getElementById('permError');
+const permText         = document.getElementById('permText');
+const btnRetry         = document.getElementById('btnRetry');
+const flipBtn          = document.getElementById('flipBtn');
+const dirBtn           = document.getElementById('dirBtn');
+const dirBtnLabel      = document.getElementById('dirBtnLabel');
+const autoSaveToggle   = document.getElementById('autoSaveToggle');
+const dorsalSelect     = document.getElementById('dorsalSelect');
+const postureSelect    = document.getElementById('postureSelect');
+const toastEl          = document.getElementById('toast');
 const btnDownloadVideo = document.getElementById('btnDownloadVideo');
 const btnDownloadJson  = document.getElementById('btnDownloadJson');
 const btnNewRecording  = document.getElementById('btnNewRecording');
-const iosHint         = document.getElementById('iosHint');
-const panelSubtitle   = document.getElementById('panelSubtitle');
-const statDuration    = document.getElementById('statDuration');
-const statFrames      = document.getElementById('statFrames');
-const statFps         = document.getElementById('statFps');
+const iosHint          = document.getElementById('iosHint');
+const panelSubtitle    = document.getElementById('panelSubtitle');
+const statDuration     = document.getElementById('statDuration');
+const statFrames       = document.getElementById('statFrames');
+const statFps          = document.getElementById('statFps');
 
 // ─────────────────────────────────────────────
-//  App state
+//  UI-only state
 // ─────────────────────────────────────────────
-let poseModel        = null;
-let animFrameId      = null;
-let mediaRecorder    = null;
-let recordedChunks   = [];
-let isRecording      = false;
-let recordingStart   = 0;
-let frameIndex       = 0;
-let frameData        = [];
-let timerInterval    = null;
-let autoStopTimeout  = null;
-let videoBlob        = null;
-let metaJson         = null;
-let canvasStream     = null;
-let mimeType         = '';
-let cameraReady      = false;
-let currentFacingMode = 'environment';
-let dirHandle        = null;
-let autoSave         = false;
+let cameraReady = false;
+let autoSave    = false;
 
 // ─────────────────────────────────────────────
-//  Helpers
+//  UI helpers
 // ─────────────────────────────────────────────
 function setStatus(msg, cls = '') {
-  statusMsg.className = cls;
+  statusMsg.className   = cls;
   statusMsg.textContent = msg;
-}
-
-function formatTime(ms) {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const ss = String(s % 60).padStart(2, '0');
-  return `${m}:${ss}`;
-}
-
-function generateId() {
-  const d = new Date();
-  return `rec_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}_${Math.random().toString(36).slice(2,7)}`;
-}
-
-/**
- * Genera el nombre base del fichero.
- * Con dorsal + postura: {DD}_{YYYYMMDDHHmmss}_{N}   ej. 07_20260320143045_3
- * Sin ellos: fallback al ID genérico.
- */
-function generateFileName() {
-  const dorsal  = dorsalSelect.value;
-  const posture = postureSelect.value;
-  if (dorsal && posture) {
-    const d  = new Date();
-    const ts = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`;
-    return `${dorsal}_${ts}_${posture}`;
-  }
-  return generateId();
-}
-
-function isMobile() {
-  return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-
-function getSupportedMimeType() {
-  const candidates = [
-    'video/mp4;codecs=avc1',
-    'video/mp4',
-    'video/webm;codecs=vp9',
-    'video/webm;codecs=vp8',
-    'video/webm',
-  ];
-  for (const type of candidates) {
-    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
-      return type;
-    }
-  }
-  return '';
-}
-
-function fileExtFromMime(mime) {
-  if (mime.startsWith('video/mp4')) return 'mp4';
-  if (mime.startsWith('video/webm')) return 'webm';
-  return 'mp4';
-}
-
-// ─────────────────────────────────────────────
-//  Canvas sizing
-// ─────────────────────────────────────────────
-function resizeCanvas() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  canvas.style.width  = w + 'px';
-  canvas.style.height = h + 'px';
-  // Internal resolution stays fixed for recording quality
-  canvas.width  = CANVAS_W;
-  canvas.height = CANVAS_H;
-}
-
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-// ─────────────────────────────────────────────
-//  Drawing helpers
-// ─────────────────────────────────────────────
-// Mirror x coordinate only for front camera
-function mx(x) { return currentFacingMode === 'user' ? 1 - x : x; }
-
-function drawFrame(results) {
-  const w = canvas.width;
-  const h = canvas.height;
-
-  // Clear
-  ctx.clearRect(0, 0, w, h);
-
-  // Draw camera image (mirror front camera only)
-  ctx.save();
-  if (currentFacingMode === 'user') {
-    ctx.translate(w, 0);
-    ctx.scale(-1, 1);
-  }
-  if (results.image) {
-    ctx.drawImage(results.image, 0, 0, w, h);
-  }
-  ctx.restore();
-
-  // Draw skeleton & landmarks
-  if (results.poseLandmarks && results.poseLandmarks.length > 0) {
-    drawSkeleton(results.poseLandmarks, w, h);
-    drawLandmarks(results.poseLandmarks, w, h);
-  }
-}
-
-function drawSkeleton(landmarks, w, h) {
-  ctx.save();
-  ctx.lineWidth   = 2.5;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-  ctx.lineCap     = 'round';
-
-  for (const [a, b] of POSE_CONNECTIONS) {
-    const lA = landmarks[a];
-    const lB = landmarks[b];
-    if (!lA || !lB) continue;
-    if ((lA.visibility ?? 1) < 0.3 || (lB.visibility ?? 1) < 0.3) continue;
-
-    const x1 = mx(lA.x) * w;
-    const y1 = lA.y * h;
-    const x2 = mx(lB.x) * w;
-    const y2 = lB.y * h;
-
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawLandmarks(landmarks, w, h) {
-  for (let i = 0; i < landmarks.length; i++) {
-    const lm = landmarks[i];
-    if (!lm) continue;
-    const vis = lm.visibility ?? 1;
-    if (vis < 0.3) continue;
-
-    const x = mx(lm.x) * w;
-    const y = lm.y * h;
-    const r = i === 0 ? 5 : 4; // nose slightly bigger
-
-    // Outer ring
-    ctx.beginPath();
-    ctx.arc(x, y, r + 1.5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fill();
-
-    // Colored dot – face = cyan, body = red/orange
-    const isface = i <= 10;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = isface ? '#00e5ff' : '#ff5252';
-    ctx.fill();
-  }
-}
-
-// ─────────────────────────────────────────────
-//  Capture frame metadata
-// ─────────────────────────────────────────────
-function captureFrameMeta(results) {
-  if (!isRecording) return;
-
-  const now = performance.now();
-  const ts  = now - recordingStart;
-
-  const lms = (results.poseLandmarks || []).map((lm, i) => ({
-    index      : i,
-    name       : LANDMARK_NAMES[i] || `landmark_${i}`,
-    x          : parseFloat(lm.x.toFixed(6)),
-    y          : parseFloat(lm.y.toFixed(6)),
-    z          : parseFloat((lm.z || 0).toFixed(6)),
-    visibility : parseFloat(((lm.visibility ?? 1)).toFixed(4)),
-  }));
-
-  frameData.push({
-    frame_index  : frameIndex++,
-    timestamp_ms : parseFloat(ts.toFixed(2)),
-    landmarks    : lms,
-  });
-}
-
-// ─────────────────────────────────────────────
-//  MediaPipe Pose setup
-// ─────────────────────────────────────────────
-function initPose() {
-  return new Promise((resolve, reject) => {
-    try {
-      const pose = new Pose({
-        locateFile: (file) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`,
-      });
-
-      pose.setOptions({
-        modelComplexity         : 1,
-        smoothLandmarks         : true,
-        enableSegmentation      : false,
-        smoothSegmentation      : false,
-        minDetectionConfidence  : 0.5,
-        minTrackingConfidence   : 0.5,
-      });
-
-      pose.onResults((results) => {
-        drawFrame(results);
-        captureFrameMeta(results);
-      });
-
-      pose.initialize().then(() => {
-        resolve(pose);
-      }).catch(reject);
-
-    } catch (e) {
-      reject(e);
-    }
-  });
-}
-
-// ─────────────────────────────────────────────
-//  Camera setup
-// ─────────────────────────────────────────────
-async function startCamera() {
-  const constraints = {
-    video: {
-      facingMode : currentFacingMode,
-      width      : { ideal: CANVAS_W },
-      height     : { ideal: CANVAS_H },
-      frameRate  : { ideal: TARGET_FPS },
-    },
-    audio: false,
-  };
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    videoEl.srcObject = stream;
-    await videoEl.play();
-    return stream;
-  } catch (err) {
-    throw err;
-  }
-}
-
-// ─────────────────────────────────────────────
-//  Camera frame loop (RAF-based, no Camera utility)
-// ─────────────────────────────────────────────
-function startCameraLoop(pose) {
-  let processing = false;
-  function processFrame() {
-    animFrameId = requestAnimationFrame(processFrame);
-    if (!processing && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      processing = true;
-      pose.send({ image: videoEl }).finally(() => { processing = false; });
-    }
-  }
-  animFrameId = requestAnimationFrame(processFrame);
-}
-
-function stopCameraLoop() {
-  if (animFrameId !== null) {
-    cancelAnimationFrame(animFrameId);
-    animFrameId = null;
-  }
-}
-
-async function restartCameraIfNeeded() {
-  if (isRecording) return;
-  cameraReady = false;
-  setStatus('Reiniciando cámara…', 'dim');
-  stopCameraLoop();
-  if (videoEl.srcObject) {
-    videoEl.srcObject.getTracks().forEach(t => t.stop());
-    videoEl.srcObject = null;
-  }
-  try {
-    await startCamera();
-    startCameraLoop(poseModel);
-    cameraReady = true;
-    setStatus('Listo · Toca el botón para grabar', 'ok');
-  } catch (err) {
-    console.error('Camera restart failed:', err);
-    setStatus('Error al reiniciar la cámara', 'err');
-  }
-}
-
-// ─────────────────────────────────────────────
-//  Recording
-// ─────────────────────────────────────────────
-function startRecording() {
-  if (isRecording || !cameraReady) return;
-
-  if (autoSave && (!dorsalSelect.value || !postureSelect.value)) {
-    setStatus('Selecciona dorsal y postura para grabar en automático', 'err');
-    return;
-  }
-
-  recordedChunks  = [];
-  frameData       = [];
-  frameIndex      = 0;
-  videoBlob       = null;
-  metaJson        = null;
-  isRecording     = true;
-  recordingStart  = performance.now();
-
-  // Get canvas stream
-  canvasStream = canvas.captureStream(TARGET_FPS);
-
-  // Determine best mime type
-  mimeType = getSupportedMimeType();
-
-  try {
-    const options = mimeType ? { mimeType } : {};
-    mediaRecorder = new MediaRecorder(canvasStream, options);
-    mimeType      = mediaRecorder.mimeType || mimeType;
-  } catch (e) {
-    // Fallback: no options
-    mediaRecorder = new MediaRecorder(canvasStream);
-    mimeType      = mediaRecorder.mimeType || 'video/webm';
-  }
-
-  mediaRecorder.ondataavailable = (e) => {
-    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-  };
-
-  mediaRecorder.onstop = onRecordingStop;
-  mediaRecorder.start(200); // collect chunks every 200ms
-
-  // UI feedback
-  recordBtn.classList.add('recording');
-  recDot.style.display = 'block';
-  flipBtn.disabled = true;
-  setStatus('Grabando… toca el botón para detener', 'rec');
-
-  // Timer tick
-  timerInterval = setInterval(updateTimer, 250);
-
-  // Auto-stop at 30s
-  autoStopTimeout = setTimeout(() => {
-    if (isRecording) stopRecording();
-  }, MAX_DURATION_MS);
-}
-
-function stopRecording() {
-  if (!isRecording) return;
-  isRecording = false;
-
-  clearInterval(timerInterval);
-  clearTimeout(autoStopTimeout);
-
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
-  }
-
-  if (canvasStream) {
-    canvasStream.getTracks().forEach(t => t.stop());
-    canvasStream = null;
-  }
-
-  recordBtn.classList.remove('recording');
-  recDot.style.display = 'none';
-  flipBtn.disabled = false;
-  setStatus('Procesando grabación…', 'dim');
-  timer.textContent = '0:00 / 0:30';
-  progressBar.style.width = '0%';
-}
-
-function updateTimer() {
-  const elapsed = performance.now() - recordingStart;
-  const pct     = Math.min(elapsed / MAX_DURATION_MS * 100, 100);
-  timer.textContent          = `${formatTime(elapsed)} / 0:30`;
-  progressBar.style.width   = `${pct}%`;
-}
-
-// ─────────────────────────────────────────────
-//  Post-recording: build assets
-// ─────────────────────────────────────────────
-async function onRecordingStop() {
-  const endTime    = performance.now();
-  const durationMs = endTime - recordingStart;
-  const durationS  = parseFloat((durationMs / 1000).toFixed(2));
-  const totalFrames = frameData.length;
-  const avgFps     = totalFrames > 0
-    ? parseFloat((totalFrames / durationS).toFixed(1))
-    : 0;
-
-  const ext = fileExtFromMime(mimeType);
-  videoBlob = new Blob(recordedChunks, { type: mimeType });
-
-  metaJson = {
-    recording: {
-      id               : generateId(),
-      dorsal           : dorsalSelect.value   || null,
-      posture_code     : postureSelect.value  ? parseInt(postureSelect.value) : null,
-      posture_name     : postureSelect.value  ? POSTURE_NAMES[postureSelect.value] : null,
-      date             : new Date().toISOString(),
-      duration_seconds : durationS,
-      fps              : avgFps,
-      resolution       : { width: CANVAS_W, height: CANVAS_H },
-      device           : navigator.userAgent,
-      platform         : isMobile() ? 'mobile' : 'desktop',
-      video_mime       : mimeType,
-    },
-    frames: frameData,
-  };
-
-  const baseName = generateFileName();
-
-  // ── Auto-save path ──
-  if (autoSave && dirHandle) {
-    setStatus('Guardando…', 'dim');
-    try {
-      const saved = await saveFilesToDirectory(videoBlob, metaJson, baseName, ext);
-      showToast(saved ? '✓ Guardado' : '⚠ Guardado en descargas');
-      resetForNextRecording();
-      return;
-    } catch (err) {
-      console.error('Auto-save failed:', err);
-      setStatus('Error al guardar, mostrando panel', 'err');
-      // Fall through to standard panel
-    }
-  }
-
-  // ── Auto-descarga (sin carpeta: escritorio sin File System Access API) ──
-  // En iOS/móvil los downloads programáticos de JSON muestran diálogos no deseados;
-  // en ese caso se cae al panel estándar para que el usuario guarde manualmente.
-  if (autoSave && !dirHandle && !isMobile()) {
-    downloadBlob(videoBlob, `${baseName}.${ext}`);
-    const jsonBlob = new Blob([JSON.stringify(metaJson, null, 2)], { type: 'application/json' });
-    downloadBlob(jsonBlob, `${baseName}_metadata.json`);
-    showToast('✓ Descargado');
-    resetForNextRecording();
-    return;
-  }
-
-  // ── Standard download panel path ──
-  statDuration.textContent  = `${durationS}s`;
-  statFrames.textContent    = totalFrames;
-  statFps.textContent       = avgFps;
-  panelSubtitle.textContent = `${totalFrames} fotogramas capturados · formato ${ext.toUpperCase()}`;
-
-  btnDownloadVideo.onclick = () => downloadBlob(videoBlob, `${baseName}.${ext}`);
-  btnDownloadJson.onclick  = () => {
-    const jsonBlob = new Blob([JSON.stringify(metaJson, null, 2)], { type: 'application/json' });
-    downloadBlob(jsonBlob, `${baseName}_metadata.json`);
-  };
-
-  showDownloadPanel();
-}
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a   = document.createElement('a');
-  a.href     = url;
-  a.download = filename;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 2000);
-}
-
-// ─────────────────────────────────────────────
-//  Directory picker & auto-save helpers
-// ─────────────────────────────────────────────
-function supportsDirectoryPicker() {
-  return typeof window.showDirectoryPicker === 'function';
-}
-
-async function pickDirectory() {
-  if (!supportsDirectoryPicker()) {
-    setStatus('Tu navegador no soporta selección de carpeta', 'err');
-    return false;
-  }
-  try {
-    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    dirHandle = handle;
-    dirBtnLabel.textContent = handle.name;
-    dirBtn.classList.add('selected');
-    dirBtn.title = handle.name;
-    return true;
-  } catch (err) {
-    if (err.name !== 'AbortError') {
-      setStatus('Sin permiso para acceder a la carpeta', 'err');
-      console.warn('Directory picker error:', err);
-    }
-    return false;
-  }
-}
-
-async function saveFilesToDirectory(videoBlob, metaJson, baseName, ext) {
-  // Verify permission (may have been revoked)
-  try {
-    const perm = await dirHandle.requestPermission({ mode: 'readwrite' });
-    if (perm !== 'granted') throw new Error('Permission denied');
-  } catch (err) {
-    console.warn('Directory permission lost, falling back to download:', err);
-    downloadBlob(videoBlob, `${baseName}.${ext}`);
-    const jsonBlob = new Blob([JSON.stringify(metaJson, null, 2)], { type: 'application/json' });
-    downloadBlob(jsonBlob, `${baseName}_metadata.json`);
-    return false;
-  }
-
-  // Write video
-  const videoFile = await dirHandle.getFileHandle(`${baseName}.${ext}`, { create: true });
-  const videoWriter = await videoFile.createWritable();
-  await videoWriter.write(videoBlob);
-  await videoWriter.close();
-
-  // Write JSON
-  const jsonFile = await dirHandle.getFileHandle(`${baseName}_metadata.json`, { create: true });
-  const jsonWriter = await jsonFile.createWritable();
-  await jsonWriter.write(JSON.stringify(metaJson, null, 2));
-  await jsonWriter.close();
-
-  return true;
 }
 
 let toastTimer = null;
@@ -1346,13 +821,10 @@ function showToast(msg = '✓ Guardado') {
 
 function resetForNextRecording() {
   setStatus('Listo · Toca el botón para grabar', 'ok');
-  timer.textContent = '0:00 / 0:30';
+  timer.textContent       = '0:00 / 0:30';
   progressBar.style.width = '0%';
 }
 
-// ─────────────────────────────────────────────
-//  Panel / UI transitions
-// ─────────────────────────────────────────────
 function showDownloadPanel() {
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   iosHint.classList.toggle('visible', isIOS);
@@ -1371,30 +843,160 @@ function showPermError(msg) {
 }
 
 // ─────────────────────────────────────────────
+//  Canvas sizing
+// ─────────────────────────────────────────────
+function resizeCanvas() {
+  canvas.style.width  = window.innerWidth  + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  canvas.width  = CANVAS_W;
+  canvas.height = CANVAS_H;
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ─────────────────────────────────────────────
+//  Recording lifecycle
+// ─────────────────────────────────────────────
+function startRecording() {
+  if (Recorder.isActive() || !cameraReady) return;
+
+  if (autoSave && (!dorsalSelect.value || !postureSelect.value)) {
+    setStatus('Selecciona dorsal y postura para grabar en automático', 'err');
+    return;
+  }
+
+  const recordingStart = performance.now();
+  const dorsalValue    = dorsalSelect.value;
+  const postureValue   = postureSelect.value;
+
+  Pose.setRecordingState(true, recordingStart);
+  Pose.setFrameCallback((frame) => Recorder.addFrame(frame));
+
+  Recorder.startRecording(canvas, {
+    dorsalValue,
+    postureValue,
+    width       : CANVAS_W,
+    height      : CANVAS_H,
+    maxDuration : MAX_DURATION_MS,
+    fps         : TARGET_FPS,
+    onTick      : ({ elapsed, pct }) => {
+      timer.textContent       = `${formatTime(elapsed)} / 0:30`;
+      progressBar.style.width = `${pct}%`;
+    },
+    onStop: (videoBlob, metaJson, info) =>
+      handleRecordingStop(videoBlob, metaJson, info, dorsalValue, postureValue),
+  });
+
+  recordBtn.classList.add('recording');
+  recDot.style.display = 'block';
+  flipBtn.disabled     = true;
+  setStatus('Grabando… toca el botón para detener', 'rec');
+}
+
+function stopRecording() {
+  if (!Recorder.isActive()) return;
+
+  Pose.setRecordingState(false);
+  Pose.setFrameCallback(null);
+  Recorder.stopRecording();
+
+  recordBtn.classList.remove('recording');
+  recDot.style.display    = 'none';
+  flipBtn.disabled        = false;
+  setStatus('Procesando grabación…', 'dim');
+  timer.textContent       = '0:00 / 0:30';
+  progressBar.style.width = '0%';
+}
+
+async function handleRecordingStop(videoBlob, metaJson, { durationS, totalFrames, avgFps, ext }, dorsalValue, postureValue) {
+  const baseName = generateFileName(dorsalValue, postureValue);
+
+  if (autoSave && Storage.getDirHandle()) {
+    setStatus('Guardando…', 'dim');
+    try {
+      const via = await Storage.save(videoBlob, metaJson, baseName, ext);
+      showToast(via !== 'none' ? '✓ Guardado' : '⚠ Guardado en descargas');
+      resetForNextRecording();
+      return;
+    } catch (err) {
+      console.error('Auto-save failed:', err);
+      setStatus('Error al guardar, mostrando panel', 'err');
+    }
+  }
+
+  if (autoSave && !Storage.getDirHandle() && !isMobile()) {
+    const via = await Storage.save(videoBlob, metaJson, baseName, ext);
+    showToast(via !== 'none' ? '✓ Descargado' : '⚠ Error al descargar');
+    resetForNextRecording();
+    return;
+  }
+
+  statDuration.textContent  = `${durationS}s`;
+  statFrames.textContent    = totalFrames;
+  statFps.textContent       = avgFps;
+  panelSubtitle.textContent = `${totalFrames} fotogramas capturados · formato ${ext.toUpperCase()}`;
+
+  btnDownloadVideo.onclick = () => Storage.downloadBlob(videoBlob, `${baseName}.${ext}`);
+  btnDownloadJson.onclick  = () => {
+    const jsonBlob = new Blob([JSON.stringify(metaJson, null, 2)], { type: 'application/json' });
+    Storage.downloadBlob(jsonBlob, `${baseName}_metadata.json`);
+  };
+
+  showDownloadPanel();
+}
+
+// ─────────────────────────────────────────────
+//  Camera lifecycle helpers
+// ─────────────────────────────────────────────
+async function restartCameraIfNeeded() {
+  if (Recorder.isActive()) return;
+  cameraReady = false;
+  setStatus('Reiniciando cámara…', 'dim');
+  try {
+    await Camera.restartCamera(Pose.sendFrame);
+    cameraReady = true;
+    setStatus('Listo · Toca el botón para grabar', 'ok');
+  } catch (err) {
+    console.error('Camera restart failed:', err);
+    setStatus('Error al reiniciar la cámara', 'err');
+  }
+}
+
+async function switchCamera() {
+  if (Recorder.isActive() || !cameraReady) return;
+
+  cameraReady      = false;
+  flipBtn.disabled = true;
+  setStatus('Cambiando cámara…', 'dim');
+
+  try {
+    await Camera.switchCameraFacing(Pose.sendFrame);
+  } catch (err) {
+    console.error('Switch camera error:', err);
+    setStatus('Error al cambiar de cámara, restaurando…', 'err');
+  } finally {
+    Pose.setFacingMode(Camera.getCurrentFacingMode());
+    cameraReady      = true;
+    flipBtn.disabled = false;
+    setStatus('Listo · Toca el botón para grabar', 'ok');
+  }
+}
+
+// ─────────────────────────────────────────────
 //  Event listeners
 // ─────────────────────────────────────────────
 recordBtn.addEventListener('click', () => {
   if (!cameraReady) return;
-  if (isRecording) {
-    stopRecording();
-  } else {
-    startRecording();
-  }
+  Recorder.isActive() ? stopRecording() : startRecording();
 });
 
 btnNewRecording.addEventListener('click', async () => {
   hideDownloadPanel();
-  setStatus('Listo para grabar', 'ok');
-  timer.textContent = '0:00 / 0:30';
-  progressBar.style.width = '0%';
-
-  // On iOS, the camera stream can be interrupted during save/download operations.
-  // Check if any track has ended and restart the camera if needed.
-  const stream = videoEl.srcObject;
+  resetForNextRecording();
+  const stream     = videoEl.srcObject;
   const streamDead = !stream || stream.getTracks().every(t => t.readyState === 'ended');
-  if (streamDead) {
-    await restartCameraIfNeeded();
-  }
+  if (streamDead) await restartCameraIfNeeded();
 });
 
 btnRetry.addEventListener('click', () => {
@@ -1404,16 +1006,11 @@ btnRetry.addEventListener('click', () => {
 
 flipBtn.addEventListener('click', switchCamera);
 
-// On iOS, the camera stream is suspended when the page goes to background.
-// Restart it automatically when the user returns to the tab.
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState !== 'visible') return;
-  if (!poseModel) return; // App not yet initialised
-  const stream = videoEl.srcObject;
+  if (document.visibilityState !== 'visible' || !cameraReady) return;
+  const stream     = videoEl.srcObject;
   const streamDead = !stream || stream.getTracks().every(t => t.readyState === 'ended');
-  if (streamDead) {
-    await restartCameraIfNeeded();
-  }
+  if (streamDead) await restartCameraIfNeeded();
 });
 
 dorsalSelect.addEventListener('change', () => {
@@ -1425,75 +1022,40 @@ postureSelect.addEventListener('change', () => {
 });
 
 dirBtn.addEventListener('click', async () => {
-  const ok = await pickDirectory();
-  if (ok && autoSave) setStatus(`Auto-guardado en: ${dirHandle.name}`, 'ok');
+  try {
+    const handle = await Storage.pickDirectory();
+    if (handle) {
+      dirBtnLabel.textContent = handle.name;
+      dirBtn.classList.add('selected');
+      dirBtn.title = handle.name;
+      if (autoSave) setStatus(`Auto-guardado en: ${handle.name}`, 'ok');
+    }
+  } catch (err) {
+    setStatus('Sin permiso para acceder a la carpeta', 'err');
+    console.warn('Directory picker error:', err);
+  }
 });
 
 autoSaveToggle.addEventListener('change', async () => {
   autoSave = autoSaveToggle.checked;
-  if (autoSave && !dirHandle && supportsDirectoryPicker()) {
-    const ok = await pickDirectory();
-    if (!ok) {
+  if (autoSave && !Storage.getDirHandle() && Storage.supportsDirectoryPicker()) {
+    try {
+      const handle = await Storage.pickDirectory();
+      if (!handle) { autoSave = false; autoSaveToggle.checked = false; return; }
+      dirBtnLabel.textContent = handle.name;
+      dirBtn.classList.add('selected');
+      dirBtn.title = handle.name;
+    } catch {
       autoSave = false;
       autoSaveToggle.checked = false;
       return;
     }
   }
-  if (autoSave && dirHandle) {
-    setStatus(`Auto-guardado en: ${dirHandle.name}`, 'ok');
-  } else if (autoSave && !dirHandle) {
-    setStatus('Auto-descarga activada', 'ok');
-  } else {
-    setStatus('Listo · Toca el botón para grabar', 'ok');
-  }
+  const handle = Storage.getDirHandle();
+  if (autoSave && handle)  setStatus(`Auto-guardado en: ${handle.name}`, 'ok');
+  else if (autoSave)       setStatus('Auto-descarga activada', 'ok');
+  else                     setStatus('Listo · Toca el botón para grabar', 'ok');
 });
-
-// ─────────────────────────────────────────────
-//  Switch camera
-// ─────────────────────────────────────────────
-async function switchCamera() {
-  if (isRecording || !cameraReady) return;
-
-  cameraReady = false;
-  flipBtn.disabled = true;
-  setStatus('Cambiando cámara…', 'dim');
-
-  // Stop RAF loop
-  stopCameraLoop();
-
-  // Stop current stream tracks
-  if (videoEl.srcObject) {
-    videoEl.srcObject.getTracks().forEach(t => t.stop());
-    videoEl.srcObject = null;
-  }
-
-  // Toggle facing mode
-  currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-
-  try {
-    await startCamera();
-    startCameraLoop(poseModel);
-    cameraReady = true;
-    flipBtn.disabled = false;
-    setStatus('Listo · Toca el botón para grabar', 'ok');
-  } catch (err) {
-    console.error('Switch camera error:', err);
-    // Revert facing mode and try to restart original camera
-    currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-    setStatus('Error al cambiar de cámara, restaurando…', 'err');
-    try {
-      await startCamera();
-      startCameraLoop(poseModel);
-      cameraReady = true;
-      setStatus('Listo · Toca el botón para grabar', 'ok');
-    } catch (fallbackErr) {
-      console.error('Fallback camera also failed:', fallbackErr);
-      setStatus('Error: no se pudo acceder a la cámara', 'err');
-      cameraReady = false;
-    }
-    flipBtn.disabled = false;
-  }
-}
 
 // ─────────────────────────────────────────────
 //  Initialization
@@ -1501,14 +1063,12 @@ async function switchCamera() {
 async function initApp() {
   loadingOverlay.classList.remove('hidden');
   loadingOverlay.style.opacity = '1';
-  loadingText.textContent = 'Iniciando cámara…';
+  loadingText.textContent      = 'Iniciando cámara…';
   setStatus('Iniciando…', 'dim');
 
-  // 1. Request camera
   try {
-    await startCamera();
+    await Camera.initCamera(videoEl, { width: CANVAS_W, height: CANVAS_H, frameRate: TARGET_FPS });
   } catch (err) {
-    console.error('Camera error:', err);
     const msg = err.name === 'NotAllowedError'
       ? 'Por favor, permite el acceso a la cámara en la configuración de tu navegador.'
       : `No se pudo acceder a la cámara: ${err.message}`;
@@ -1516,30 +1076,19 @@ async function initApp() {
     return;
   }
 
-  // 2. Load MediaPipe Pose
   loadingText.textContent = 'Cargando modelo de pose…';
   try {
-    poseModel = await initPose();
+    await Pose.initPose(ctx, canvas);
   } catch (err) {
     console.error('Pose model error:', err);
     showPermError('No se pudo cargar el modelo de detección de pose. Verifica tu conexión a internet.');
     return;
   }
 
-  // 3. Start camera loop
-  try {
-    startCameraLoop(poseModel);
-  } catch (err) {
-    console.error('Camera loop error:', err);
-    showPermError('Error al iniciar el procesamiento de video: ' + err.message);
-    return;
-  }
-
-  // 4. Ready
+  Camera.startLoop(Pose.sendFrame);
   cameraReady = true;
   setStatus('Listo · Toca el botón para grabar', 'ok');
 
-  // Fade out loading overlay
   loadingOverlay.style.transition = 'opacity 0.6s';
   loadingOverlay.style.opacity    = '0';
   setTimeout(() => loadingOverlay.classList.add('hidden'), 650);
@@ -1548,29 +1097,25 @@ async function initApp() {
 // ─────────────────────────────────────────────
 //  Boot
 // ─────────────────────────────────────────────
-
-// Deshabilitar selector de carpeta en navegadores sin soporte
 (function initDirBtn() {
-  if (!supportsDirectoryPicker()) {
-    dirBtn.disabled = true;
-    dirBtn.style.opacity = '0.35';
-    dirBtn.style.cursor = 'default';
-    dirBtn.title = 'No disponible en este navegador';
-    dirBtnLabel.textContent = 'Sin carpeta';
+  if (!Storage.supportsDirectoryPicker()) {
+    dirBtn.disabled             = true;
+    dirBtn.style.opacity        = '0.35';
+    dirBtn.style.cursor         = 'default';
+    dirBtn.title                = 'No disponible en este navegador';
+    dirBtnLabel.textContent     = 'Sin carpeta';
   }
 })();
 
-// Generar opciones de dorsal 00–99
 (function buildDorsalOptions() {
   for (let i = 0; i <= 99; i++) {
-    const opt = document.createElement('option');
-    opt.value = String(i).padStart(2, '0');
+    const opt       = document.createElement('option');
+    opt.value       = String(i).padStart(2, '0');
     opt.textContent = String(i).padStart(2, '0');
     dorsalSelect.appendChild(opt);
   }
 })();
 
-// Registrar Service Worker para uso offline
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
