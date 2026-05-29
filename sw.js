@@ -12,6 +12,8 @@ const PRE_CACHE = [
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './src/data/landmarks.js',
+  './src/data/postures.js',
   'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js',
 ];
 
