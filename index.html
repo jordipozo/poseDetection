@@ -648,13 +648,6 @@
       </select>
       <select id="postureSelect" class="sel-control" aria-label="Postura capturada">
         <option value="">Postura</option>
-        <option value="1">1 · Tiro libre</option>
-        <option value="2">2 · Triple</option>
-        <option value="3">3 · Salto</option>
-        <option value="4">4 · Rebote</option>
-        <option value="5">5 · Defensa</option>
-        <option value="6">6 · Cambio</option>
-        <option value="7">7 · Bandeja</option>
       </select>
     </div>
     <div id="settingsRow">
@@ -750,6 +743,7 @@
 </div>
 
 <script type="module">
+import { POSTURE_NAMES } from './src/data/postures.js';
 import { formatTime, generateFileName, isMobile } from './src/shared/utils.js';
 import * as Camera   from './src/features/camera/camera.js';
 import * as Pose     from './src/features/pose/pose.js';
@@ -798,10 +792,13 @@ const statFrames       = document.getElementById('statFrames');
 const statFps          = document.getElementById('statFps');
 
 // ─────────────────────────────────────────────
-//  UI-only state
+//  UI state
 // ─────────────────────────────────────────────
-let cameraReady = false;
-let autoSave    = false;
+const state = {
+  state.cameraReady : false,
+  state.autoSave    : false,
+  toastTimer  : null,
+};
 
 // ─────────────────────────────────────────────
 //  UI helpers
@@ -811,12 +808,11 @@ function setStatus(msg, cls = '') {
   statusMsg.textContent = msg;
 }
 
-let toastTimer = null;
 function showToast(msg = '✓ Guardado') {
   toastEl.textContent = msg;
   toastEl.classList.add('visible');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove('visible'), 1200);
+  clearTimeout(state.toastTimer);
+  state.toastTimer = setTimeout(() => toastEl.classList.remove('visible'), 1200);
 }
 
 function resetForNextRecording() {
@@ -859,9 +855,9 @@ resizeCanvas();
 //  Recording lifecycle
 // ─────────────────────────────────────────────
 function startRecording() {
-  if (Recorder.isActive() || !cameraReady) return;
+  if (Recorder.isActive() || !state.cameraReady) return;
 
-  if (autoSave && (!dorsalSelect.value || !postureSelect.value)) {
+  if (state.autoSave && (!dorsalSelect.value || !postureSelect.value)) {
     setStatus('Selecciona dorsal y postura para grabar en automático', 'err');
     return;
   }
@@ -912,7 +908,7 @@ function stopRecording() {
 async function handleRecordingStop(videoBlob, metaJson, { durationS, totalFrames, avgFps, ext }, dorsalValue, postureValue) {
   const baseName = generateFileName(dorsalValue, postureValue);
 
-  if (autoSave && Storage.getDirHandle()) {
+  if (state.autoSave && Storage.getDirHandle()) {
     setStatus('Guardando…', 'dim');
     try {
       const via = await Storage.save(videoBlob, metaJson, baseName, ext);
@@ -925,7 +921,7 @@ async function handleRecordingStop(videoBlob, metaJson, { durationS, totalFrames
     }
   }
 
-  if (autoSave && !Storage.getDirHandle() && !isMobile()) {
+  if (state.autoSave && !Storage.getDirHandle() && !isMobile()) {
     const via = await Storage.save(videoBlob, metaJson, baseName, ext);
     showToast(via !== 'none' ? '✓ Descargado' : '⚠ Error al descargar');
     resetForNextRecording();
@@ -951,11 +947,11 @@ async function handleRecordingStop(videoBlob, metaJson, { durationS, totalFrames
 // ─────────────────────────────────────────────
 async function restartCameraIfNeeded() {
   if (Recorder.isActive()) return;
-  cameraReady = false;
+  state.cameraReady = false;
   setStatus('Reiniciando cámara…', 'dim');
   try {
     await Camera.restartCamera(Pose.sendFrame);
-    cameraReady = true;
+    state.cameraReady = true;
     setStatus('Listo · Toca el botón para grabar', 'ok');
   } catch (err) {
     console.error('Camera restart failed:', err);
@@ -964,9 +960,9 @@ async function restartCameraIfNeeded() {
 }
 
 async function switchCamera() {
-  if (Recorder.isActive() || !cameraReady) return;
+  if (Recorder.isActive() || !state.cameraReady) return;
 
-  cameraReady      = false;
+  state.cameraReady      = false;
   flipBtn.disabled = true;
   setStatus('Cambiando cámara…', 'dim');
 
@@ -977,7 +973,7 @@ async function switchCamera() {
     setStatus('Error al cambiar de cámara, restaurando…', 'err');
   } finally {
     Pose.setFacingMode(Camera.getCurrentFacingMode());
-    cameraReady      = true;
+    state.cameraReady      = true;
     flipBtn.disabled = false;
     setStatus('Listo · Toca el botón para grabar', 'ok');
   }
@@ -987,7 +983,7 @@ async function switchCamera() {
 //  Event listeners
 // ─────────────────────────────────────────────
 recordBtn.addEventListener('click', () => {
-  if (!cameraReady) return;
+  if (!state.cameraReady) return;
   Recorder.isActive() ? stopRecording() : startRecording();
 });
 
@@ -1007,7 +1003,7 @@ btnRetry.addEventListener('click', () => {
 flipBtn.addEventListener('click', switchCamera);
 
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState !== 'visible' || !cameraReady) return;
+  if (document.visibilityState !== 'visible' || !state.cameraReady) return;
   const stream     = videoEl.srcObject;
   const streamDead = !stream || stream.getTracks().every(t => t.readyState === 'ended');
   if (streamDead) await restartCameraIfNeeded();
@@ -1028,7 +1024,7 @@ dirBtn.addEventListener('click', async () => {
       dirBtnLabel.textContent = handle.name;
       dirBtn.classList.add('selected');
       dirBtn.title = handle.name;
-      if (autoSave) setStatus(`Auto-guardado en: ${handle.name}`, 'ok');
+      if (state.autoSave) setStatus(`Auto-guardado en: ${handle.name}`, 'ok');
     }
   } catch (err) {
     setStatus('Sin permiso para acceder a la carpeta', 'err');
@@ -1037,23 +1033,23 @@ dirBtn.addEventListener('click', async () => {
 });
 
 autoSaveToggle.addEventListener('change', async () => {
-  autoSave = autoSaveToggle.checked;
-  if (autoSave && !Storage.getDirHandle() && Storage.supportsDirectoryPicker()) {
+  state.autoSave = autoSaveToggle.checked;
+  if (state.autoSave && !Storage.getDirHandle() && Storage.supportsDirectoryPicker()) {
     try {
       const handle = await Storage.pickDirectory();
-      if (!handle) { autoSave = false; autoSaveToggle.checked = false; return; }
+      if (!handle) { state.autoSave = false; autoSaveToggle.checked = false; return; }
       dirBtnLabel.textContent = handle.name;
       dirBtn.classList.add('selected');
       dirBtn.title = handle.name;
     } catch {
-      autoSave = false;
+      state.autoSave = false;
       autoSaveToggle.checked = false;
       return;
     }
   }
   const handle = Storage.getDirHandle();
-  if (autoSave && handle)  setStatus(`Auto-guardado en: ${handle.name}`, 'ok');
-  else if (autoSave)       setStatus('Auto-descarga activada', 'ok');
+  if (state.autoSave && handle)  setStatus(`Auto-guardado en: ${handle.name}`, 'ok');
+  else if (state.autoSave)       setStatus('Auto-descarga activada', 'ok');
   else                     setStatus('Listo · Toca el botón para grabar', 'ok');
 });
 
@@ -1086,7 +1082,7 @@ async function initApp() {
   }
 
   Camera.startLoop(Pose.sendFrame);
-  cameraReady = true;
+  state.cameraReady = true;
   setStatus('Listo · Toca el botón para grabar', 'ok');
 
   loadingOverlay.style.transition = 'opacity 0.6s';
@@ -1105,6 +1101,15 @@ async function initApp() {
     dirBtn.title                = 'No disponible en este navegador';
     dirBtnLabel.textContent     = 'Sin carpeta';
   }
+})();
+
+(function buildPostureOptions() {
+  Object.entries(POSTURE_NAMES).forEach(([code, name]) => {
+    const opt       = document.createElement('option');
+    opt.value       = code;
+    opt.textContent = `${code} · ${name.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())}`;
+    postureSelect.appendChild(opt);
+  });
 })();
 
 (function buildDorsalOptions() {
