@@ -15,18 +15,18 @@ evolucionar sin introducir complejidad innecesaria.
 
 - La aplicación es **100 % client-side**. No se añadirá ningún servidor, backend ni base
   de datos.
-- Todo el código de producción reside en **`index.html`** (un único fichero). No hay bundler,
-  npm ni proceso de compilación. Esta decisión es intencional y no debe revertirse.
-- Las dependencias externas se cargan exclusivamente desde **jsDelivr CDN**. No se instalan
-  paquetes localmente.
+- El punto de entrada es **`index.html`**; la lógica reside en módulos ES bajo `src/`.
+  No hay bundler ni proceso de compilación. Esta decisión es intencional y no debe revertirse.
+- Las dependencias de producción se cargan exclusivamente desde **jsDelivr CDN** con versiones
+  fijas (ver `docs/SPECS.md` §3). No se instalan paquetes de producción localmente.
 - `sw.js` y `manifest.json` son archivos auxiliares de la PWA; no contienen lógica de negocio.
 
 ---
 
 ## Reglas de trabajo
 
-- **Antes de cambiar código**, lee `index.html` y los documentos de especificaciones
-  (`ESPECIFICACIONES.md`, `TECHNICAL_SPECS.md`) para entender el estado actual.
+- **Antes de cambiar código**, lee `index.html` y `docs/SPECS.md` para entender el
+  estado actual de la arquitectura, los formatos de datos y las restricciones.
 - Haz cambios pequeños y fáciles de revisar. Un cambio = una responsabilidad.
 - No elimines funcionalidad existente sin explicarlo explícitamente en la respuesta.
 - Mantén el fichero `index.html` por debajo de ~1 000 líneas cuando sea razonable.
@@ -37,7 +37,7 @@ evolucionar sin introducir complejidad innecesaria.
   visibles al usuario deben estar en español.
 - Los identificadores JS, nombres de variables y constantes pueden estar en inglés o
   español; sé consistente con la convención que ya usa el código circundante.
-- Actualiza `ESPECIFICACIONES.md` si cambian comandos, parámetros, estructura de datos
+- Actualiza `docs/SPECS.md` si cambian comandos, parámetros, estructura de datos
   o comportamiento observable.
 
 ---
