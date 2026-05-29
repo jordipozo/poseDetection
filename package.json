@@ -9,7 +9,8 @@
   },
   "scripts": {
     "lint": "eslint src/",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
   },
   "repository": {
     "type": "git",
@@ -24,6 +25,8 @@
   },
   "homepage": "https://github.com/jordipozo/poseDetection#readme",
   "devDependencies": {
-    "eslint": "^8.57.1"
+    "@vitest/coverage-v8": "^4.1.7",
+    "eslint": "^8.57.1",
+    "vitest": "^4.1.7"
   }
 }
