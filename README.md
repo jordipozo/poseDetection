@@ -6,7 +6,7 @@ PWA de investigación para captura y análisis de pose corporal en movimientos d
 
 ## Captura de pantalla
 
-> _Añadir aquí una captura o GIF de la app en uso (canvas con esqueleto, barra de controles inferior)._
+![UI principal — canvas con esqueleto superpuesto y barra de controles](docs/screenshot.png)
 
 ---
 
