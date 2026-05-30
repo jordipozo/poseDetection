@@ -853,6 +853,24 @@
 
 </div>
 
+<!-- Detecta si el bloque module falla y muestra el error en pantalla -->
+<script>
+  window.__appStarted = false;
+  window.addEventListener('error', (e) => {
+    if (window.__appStarted) return;
+    const el = document.getElementById('loadingText');
+    if (el) el.textContent = 'Error al cargar: ' + (e.message || e.filename || 'módulo JS');
+  });
+  // Si tras 10 s el JS de módulo no ha arrancado, muestra aviso
+  setTimeout(() => {
+    if (!window.__appStarted) {
+      const el = document.getElementById('loadingText');
+      if (el && el.textContent === 'Cargando modelos de pose…') {
+        el.textContent = 'Error: no se pudo iniciar la app. Recarga la página.';
+      }
+    }
+  }, 10000);
+</script>
 <script type="module">
 import { POSTURE_NAMES } from './src/data/postures.js';
 import { formatTime, generateFileName, isMobile, buildCsv } from './src/shared/utils.js';
@@ -1263,6 +1281,7 @@ autoSaveToggle.addEventListener('change', async () => {
 //  Initialization
 // ─────────────────────────────────────────────
 async function initApp() {
+  window.__appStarted = true;
   loadingOverlay.classList.remove('hidden');
   loadingOverlay.style.opacity = '1';
   loadingText.textContent      = 'Iniciando…';
