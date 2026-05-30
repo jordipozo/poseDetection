@@ -1265,7 +1265,7 @@ autoSaveToggle.addEventListener('change', async () => {
 async function initApp() {
   loadingOverlay.classList.remove('hidden');
   loadingOverlay.style.opacity = '1';
-  loadingText.textContent      = 'Iniciando cámara…';
+  loadingText.textContent      = 'Iniciando…';
   setStatus('Iniciando…', 'dim');
 
   try {
@@ -1283,7 +1283,7 @@ async function initApp() {
     await Pose.initPose(ctx, canvas);
   } catch (err) {
     console.error('Pose model error:', err);
-    showPermError('No se pudo cargar el modelo de detección de pose. Verifica tu conexión a internet.');
+    showPermError(`No se pudo cargar el modelo de detección de pose. ${err.message || 'Verifica tu conexión a internet y recarga la página.'}`);
     return;
   }
 

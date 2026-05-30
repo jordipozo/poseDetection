@@ -1,4 +1,5 @@
 import { LANDMARK_NAMES, POSE_CONNECTIONS } from '../../data/landmarks.js';
+import { isMobile } from '../../shared/utils.js';
 
 let _pose           = null;
 let _ctx            = null;
@@ -13,14 +14,15 @@ let _frameCallback  = null;
 export async function initPose(ctx, canvas) {
   _ctx    = ctx;
   _canvas = canvas;
-  return new Promise((resolve, reject) => {
+
+  const init = new Promise((resolve, reject) => {
     try {
       const pose = new Pose({          // eslint-disable-line no-undef
         locateFile: (file) =>
           `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`,
       });
       pose.setOptions({
-        modelComplexity        : 1,
+        modelComplexity        : isMobile() ? 0 : 1,
         smoothLandmarks        : true,
         enableSegmentation     : false,
         smoothSegmentation     : false,
@@ -31,6 +33,14 @@ export async function initPose(ctx, canvas) {
       pose.initialize().then(() => { _pose = pose; resolve(); }).catch(reject);
     } catch (e) { reject(e); }
   });
+
+  // En móvil pose.initialize() puede quedarse colgado sin rechazar;
+  // tras 45 s lanzamos un error descriptivo.
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Timeout al cargar MediaPipe (>45 s). Comprueba la conexión.')), 45000)
+  );
+
+  return Promise.race([init, timeout]);
 }
 
 export function setFacingMode(mode)  { _facingMode = mode; }
